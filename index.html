@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Dashboard</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --text-main: #ffffff;
+      --text-sub: #a0a0a0;
+      --accent: #4da8da;
+      --accent-hover: #3b8ac4;
+      --danger: #e57373;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    /* 時計と日付 */
+    #date-display {
+      font-size: 1.2rem;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+
+    #clock-display {
+      font-size: 3.5rem;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+
+    /* タイマー / ポモドーロ */
+    .timer-title {
+      font-size: 1rem;
+      color: var(--text-sub);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    #timer-display {
+      font-size: 3rem;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 24px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      background-color: transparent;
+      color: var(--text-main);
+      border: 1px solid var(--text-sub);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      border-color: var(--text-main);
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    button.primary {
+      background-color: var(--accent);
+      color: #fff;
+      border: none;
+    }
+
+    button.primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .mode-selectors {
+      margin-bottom: 24px;
+      display: flex;
+      gap: 8px;
+      background: rgba(0,0,0,0.2);
+      padding: 4px;
+      border-radius: 10px;
+    }
+
+    .mode-selectors button {
+      border: none;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      border-radius: 6px;
+    }
+
+    .mode-selectors button.active {
+      background-color: var(--text-sub);
+      color: var(--bg-color);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard">
+    <div class="card">
+      <div id="date-display">--月--日 (-)</div>
+      <div id="clock-display">00:00:00</div>
+    </div>
+
+    <div class="card">
+      <div class="timer-title">Timer & Pomodoro</div>
+      
+      <div class="mode-selectors">
+        <button id="mode-pomodoro" class="active" onclick="setMode('pomodoro')">Pomodoro (25m)</button>
+        <button id="mode-short" onclick="setMode('shortBreak')">Break (5m)</button>
+        <button id="mode-stopwatch" onclick="setMode('stopwatch')">Stopwatch</button>
+      </div>
+
+      <div id="timer-display">25:00</div>
+      
+      <div class="controls">
+        <button id="start-btn" class="primary" onclick="toggleTimer()">Start</button>
+        <button onclick="resetTimer()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 時計と日付の処理 ---
+    function updateClock() {
+      const now = new Date();
+      
+      // 日付のフォーマット (例: 2026年3月6日 (金))
+      const optionsDate = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
+      document.getElementById('date-display').textContent = now.toLocaleDateString('ja-JP', optionsDate);
+      
+      // 時計のフォーマット (例: 14:30:45)
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('clock-display').textContent = `${hours}:${minutes}:${seconds}`;
+    }
+    
+    setInterval(updateClock, 1000);
+    updateClock(); // 初期表示
+
+    // --- タイマー・ストップウォッチの処理 ---
+    let timerInterval;
+    let isRunning = false;
+    let currentMode = 'pomodoro'; // 'pomodoro', 'shortBreak', 'stopwatch'
+    let timeRemaining = 25 * 60; // 秒数
+    let stopwatchTime = 0;
+
+    const display = document.getElementById('timer-display');
+    const startBtn = document.getElementById('start-btn');
+
+    const modes = {
+      pomodoro: { time: 25 * 60, id: 'mode-pomodoro' },
+      shortBreak: { time: 5 * 60, id: 'mode-short' },
+      stopwatch: { time: 0, id: 'mode-stopwatch' }
+    };
+
+    function updateTimerDisplay(seconds) {
+      const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      display.textContent = `${m}:${s}`;
+    }
+
+    function setMode(mode) {
+      if (isRunning) toggleTimer(); // 実行中なら止める
+      
+      currentMode = mode;
+      timeRemaining = modes[mode].time;
+      stopwatchTime = 0;
+
+      // ボタンのアクティブ状態を更新
+      Object.keys(modes).forEach(k => {
+        document.getElementById(modes[k].id).classList.remove('active');
+      });
+      document.getElementById(modes[mode].id).classList.add('active');
+
+      updateTimerDisplay(currentMode === 'stopwatch' ? 0 : timeRemaining);
+    }
+
+    function toggleTimer() {
+      if (isRunning) {
+        clearInterval(timerInterval);
+        startBtn.textContent = 'Start';
+        startBtn.classList.add('primary');
+      } else {
+        startBtn.textContent = 'Pause';
+        startBtn.classList.remove('primary');
+        
+        timerInterval = setInterval(() => {
+          if (currentMode === 'stopwatch') {
+            stopwatchTime++;
+            updateTimerDisplay(stopwatchTime);
+          } else {
+            if (timeRemaining > 0) {
+              timeRemaining--;
+              updateTimerDisplay(timeRemaining);
+            } else {
+              clearInterval(timerInterval);
+              isRunning = false;
+              startBtn.textContent = 'Start';
+              startBtn.classList.add('primary');
+              alert('Time is up!'); // 簡単な通知
+            }
+          }
+        }, 1000);
+      }
+      isRunning = !isRunning;
+    }
+
+    function resetTimer() {
+      if (isRunning) toggleTimer();
+      timeRemaining = modes[currentMode].time;
+      stopwatchTime = 0;
+      updateTimerDisplay(currentMode === 'stopwatch' ? 0 : timeRemaining);
+    }
+  </script>
+</body>
+</html>
